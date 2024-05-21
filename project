@@ -1,0 +1,756 @@
+//This file contains both the source code and the driver class. 
+//When the code is run, a menu is displayed from which you can make choices. 
+//This is how all methods were tested: if the code is able to complete ALL TASKS  
+//without crashing or failing, the code is complete and correct (hypothetically). 
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <stdexcept>
+
+
+
+using namespace std;
+
+
+class Payroll {
+public:
+    virtual double computePayroll() const = 0;
+};
+
+
+class Person : public Payroll {
+protected:
+    int ID;
+    string fullName;
+    string gender;
+    int age;
+    string address;
+    string phone;
+    string departmentID;
+
+public:
+    Person(int ID, string fullName, string gender, int age, string departmentID, string address, string phone)
+        : ID(ID), fullName(fullName), gender(gender), age(age), address(address), phone(phone), departmentID(departmentID) {}
+
+    string getName() const {
+        return fullName;
+    }
+
+    int getID() const {
+        return ID;
+    }
+
+    virtual string getCategory() const = 0;
+
+    virtual string toString() const {
+        return "ID: " + to_string(ID) + "\nName: " + fullName + "\n" + gender + ", " + to_string(age) + ", Department #" + departmentID +
+               "\nAddress: " + address + "\nPhone Number: " + phone;
+    }
+
+    bool equals(const Person& person) const {
+        return ID == person.ID;
+    }
+
+    virtual void save(ofstream& ofs) const {
+        ofs << ID << "\n" << fullName << "\n" << gender << "\n" << age << "\n" << departmentID << "\n" << address << "\n" << phone << "\n";
+    }
+
+    virtual void load(ifstream& ifs) {
+        ifs >> ID;
+        ifs.ignore();
+        getline(ifs, fullName);
+        ifs >> gender >> age >> departmentID;
+        ifs.ignore();
+        getline(ifs, address);
+        getline(ifs, phone);
+    }
+};
+
+class Teacher : public Person {
+protected:
+    string degree;
+    string specialty;
+    bool fullTime;
+
+public:
+    Teacher(int ID, string fullName, string gender, int age, string departmentID, string address, string phone, string degree, string specialty, bool fullTime)
+        : Person(ID, fullName, gender, age, departmentID, address, phone), degree(degree), specialty(specialty), fullTime(fullTime) {}
+
+    string getCategory() const override {
+        return "Teacher";
+    }
+
+    string toString() const override {
+        return Person::toString() + "\nDegree: " + degree + "\nSpecialty: " + specialty + "\n";
+    }
+
+    double getDegreeRate() const {
+        if (degree == "PhD") {
+            return 112;
+        }
+        if (degree == "Masters") {
+            return 82;
+        }
+        if (degree == "Bachelors") {
+            return 42;
+        }
+        return 0;
+    }
+
+    void save(ofstream& ofs) const override {
+        Person::save(ofs);
+        ofs << degree << "\n" << specialty << "\n" << fullTime << "\n";
+    }
+
+    void load(ifstream& ifs) override {
+        Person::load(ifs);
+        getline(ifs, degree);
+        getline(ifs, specialty);
+        ifs >> fullTime;
+    }
+};
+
+//Class FullTimeTeacher: one of the subclasses of "Teacher". Contains overrides of the previous save and load functions as well as 
+class FullTimeTeacher : public Teacher {
+public:
+    FullTimeTeacher(int ID, string fullName, string gender, int age, string departmentID, string address, string phone, string degree, string specialty)
+        : Teacher(ID, fullName, gender, age, departmentID, address, phone, degree, specialty, true) {}
+
+    double computePayroll() const override {
+        return (32 * getDegreeRate() * 2) * 0.85;
+    }
+
+    void save(ofstream& ofs) const override {
+        Teacher::save(ofs);
+    }
+
+    void load(ifstream& ifs) override {
+        Teacher::load(ifs);
+    }
+};
+
+class PartTimeTeacher : public Teacher {
+private:
+    int hoursWorked;
+
+public:
+    PartTimeTeacher(int ID, string fullName, string gender, int age, string departmentID, string address, string phone, string degree, string specialty, int hoursWorked)
+        : Teacher(ID, fullName, gender, age, departmentID, address, phone, degree, specialty, false), hoursWorked(hoursWorked) {}
+
+    string toString() const override {
+        return Teacher::toString() + "Hours Worked: " + to_string(hoursWorked) + "\n";
+    }
+
+    double computePayroll() const override {
+        return (hoursWorked * getDegreeRate() * 2) * 0.76;
+    }
+
+    void save(ofstream& ofs) const override {
+        Teacher::save(ofs);
+        ofs << hoursWorked << "\n";
+    }
+
+    void load(ifstream& ifs) override {
+        Teacher::load(ifs);
+        ifs >> hoursWorked;
+    }
+};
+
+class Staff : public Person {
+private:
+    string duty;
+    int workload;
+
+public:
+    Staff(int ID, string fullName, string gender, int age, string departmentID, string address, string phone, string duty, int workload)
+        : Person(ID, fullName, gender, age, departmentID, address, phone), duty(duty), workload(workload) {}
+
+    string getCategory() const override {
+        return "Staff";
+    }
+
+    string toString() const override {
+        return Person::toString() + "\nDuty: " + duty + "\nWorkload: " + to_string(workload) + "\n";
+    }
+
+    double computePayroll() const override {
+        int effectiveWorkload = workload;
+        if (effectiveWorkload > 40) {
+            effectiveWorkload = 40;
+        }
+        return (effectiveWorkload * 32 * 2) * 0.75;
+    }
+
+    void save(ofstream& ofs) const override {
+        Person::save(ofs);
+        ofs << duty << "\n" << workload << "\n";
+    }
+
+    void load(ifstream& ifs) override {
+        Person::load(ifs);
+        getline(ifs, duty);
+        ifs >> workload;
+    }
+};
+
+class Department {
+protected:
+    int id;
+    string name;
+    Teacher* dean;
+    vector<Teacher*> teachers;
+    vector<Staff*> staff;
+
+public:
+    Department(int id, const string& name) : id(id), name(name), dean(nullptr) {}
+
+    const vector<Teacher*>& getTeachers() const {
+        return teachers;
+    }
+
+    const vector<Staff*>& getStaff() const {
+        return staff;
+    }
+
+    string getID() const {
+        return to_string(id);
+    }
+
+    string getName() const{
+        return name;
+    }
+
+    int getDeanID() const {
+        if (dean) {
+            return dean->getID();
+        } else {
+            return -1;
+        }
+    }
+
+    void AddTeacher(Teacher* teacher) {
+        for (const auto& t : teachers) {
+            if (t->equals(*teacher)) {
+                throw runtime_error("Teacher already exists in department!!!\n");
+            }
+        }
+        teachers.push_back(teacher);
+    }
+
+    void AddStaff(Staff* staffMember) {
+        for (const auto& s : staff) {
+            if (s->equals(*staffMember)) {
+                throw runtime_error("Staff member already exists in department!!!\n");
+            }
+        }
+        staff.push_back(staffMember);
+    }
+
+    void SetDean(Teacher* teacher) {
+        bool found = false;
+        for (const auto& t : teachers) {
+            if (t->equals(*teacher)) {
+                dean = teacher;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            throw runtime_error("Dean must be a teacher of the department!!!\n");
+        }
+    }
+
+    string toString() const {
+        string result = "Department " + to_string(id) + ", Name: " + name + "\n\nDean: " + (dean ? dean->toString() : "None");
+        result += "\n\nTeachers:\n";
+        for (const auto& t : teachers) {
+            result += t->toString() + "\n";
+        }
+        result += "\nStaff:\n";
+        for (const auto& s : staff) {
+            result += s->toString() + "\n";
+        }
+        return result;
+    }
+
+    friend ostream& operator<<(ostream& os, const Department& dept) {
+        os << dept.toString();
+        return os;
+    }
+
+    void saveData(ofstream& ofs) const {
+        if (!ofs) {
+            throw runtime_error("Unable to open file for saving...\n");
+        }
+
+        ofs << "Department\n";
+        ofs << "ID: " << id << "\n";
+        ofs << name << "\n";
+        if (dean) {
+            ofs << "Dean ID: " << dean->getID() << "\n";
+        } else {
+            ofs << "Dean ID: -1\n";
+        }
+
+        ofs << "Number of Teachers: " << teachers.size() << "\n";
+        for (const auto& teacher : teachers) {
+            if(dynamic_cast<FullTimeTeacher*>(teacher)){
+                ofs << "FullTimeTeacher\n";
+            } else if(dynamic_cast<PartTimeTeacher*>(teacher)){
+                ofs << "PartTimeTeacher\n";
+            }
+            teacher->save(ofs);
+        }
+
+        ofs << "Number of Staff Members: " << staff.size() << "\n";
+        for (const auto& staffMember : staff) {
+            ofs << "Staff\n";
+            staffMember->save(ofs);
+        }
+        ofs << endl;
+    }
+};
+
+void loadData(vector<Department>& departments) {
+    cout << "\n=============== HR Management System ===============";
+    cout << "\n\n---------- Existing Departments ----------";
+
+    ifstream ifs("departments.txt");
+    if (!ifs.is_open()) {
+        cout << "\nError: Unable to open file for loading...\n\n";
+        return;
+    }
+
+    departments.clear();
+    string line;
+
+    while (getline(ifs, line)) {
+        if (line == "Department") {
+            int id;
+            string name;
+
+            
+            getline(ifs, line);
+            if (line.substr(0, 3) != "ID:") {
+                cout << "Error: Expected 'ID:' line but got: " << line << endl;
+                return;
+            }
+            cout << "\n\n" << line << endl; 
+            id = stoi(line.substr(4));
+
+            
+            getline(ifs, name);
+            cout << "Department Name: " << name << endl; 
+
+            Department dept(id, name);
+
+            
+            getline(ifs, line);
+            if (line.substr(0, 8) != "Dean ID:") {
+                cout << "Error: Expected 'Dean ID:' line but got: " << line << endl;
+                return;
+            }
+            cout << line << endl; 
+            int deanID = stoi(line.substr(9));
+
+            
+            getline(ifs, line);
+            if (line.substr(0, 19) != "Number of Teachers:") {
+                cout << "Error: Expected 'Number of Teachers:' line but got: " << line << endl;
+                return;
+            }
+            cout << "\n" << line << endl; 
+            size_t numTeachers = stoi(line.substr(20));
+
+            for (size_t i = 0; i < numTeachers; ++i) {
+                while (getline(ifs, line) && line.empty()) {
+                    
+                }
+                cout << line << endl; 
+                Teacher* teacher = nullptr;
+
+                if (line == "FullTimeTeacher") {
+                    teacher = new FullTimeTeacher(0, "", "", 0, "", "", "", "", "");
+                } else if (line == "PartTimeTeacher") {
+                    teacher = new PartTimeTeacher(0, "", "", 0, "", "", "", "", "", 0);
+                } else {
+                    cout << "Unknown teacher type: " << line << endl;
+                    return;
+                }
+
+                if (teacher) {
+                    teacher->load(ifs);
+                    dept.AddTeacher(teacher);
+
+                    
+                    if (deanID != -1 && teacher->getID() == deanID) {
+                        dept.SetDean(teacher);
+                    }
+                }
+            }
+
+            
+            while (getline(ifs, line) && line.empty());
+
+            
+            if (line.substr(0, 24) != "Number of Staff Members:") {
+                cout << "Error: Expected 'Number of Staff Members:' line but got: " << line << endl;
+                return;
+            }
+            cout << "\n" << line << endl; 
+            size_t numStaff = stoi(line.substr(25));
+
+            
+            for (size_t i = 0; i < numStaff; ++i) {
+                while (getline(ifs, line) && line.empty()) {
+                    
+                }
+                cout << line << endl; 
+                if (line != "Staff") {
+                    cout << "Unknown staff type: " << line << endl;
+                    return;
+                }
+                Staff* staffMember = new Staff(0, "", "", 0, "", "", "", "", 0);
+                staffMember->load(ifs);
+                dept.AddStaff(staffMember);
+            }
+
+            departments.push_back(dept);
+        }
+    }
+
+    ifs.close();
+    cout << "\n\nData loaded successfully!\n\n\n";
+}
+
+void addDepartment(vector<Department>& departments) {
+    int id;
+    string name;
+
+    cout << "\nEnter Department ID: ";
+    cin >> id;
+
+    
+    for (const auto& dept : departments) {
+        if (dept.getID() == to_string(id)) {
+            throw runtime_error("Error: Department with ID " + to_string(id) + " already exists!!! Please use a different ID.\n");
+        }
+    }
+
+    cout << "Enter Department Name: ";
+    cin.ignore();
+    getline(cin, name);
+
+    departments.emplace_back(Department{id, name});
+    cout << "\nDepartment added successfully!\n\n";
+}
+
+void addTeacher(vector<Department>& departments) {
+    cout << "\nAvailable Departments:\n";
+    for (const auto& dept : departments) {
+        cout << "ID: " << dept.getID() << ", Name: " << dept.getName() << endl;
+    }
+
+    string departmentID;
+    cout << "\nEnter Department ID to add teacher: ";
+    cin >> departmentID;
+
+    Department* department = nullptr;
+    for (auto& dept : departments) {
+        if (dept.getID() == departmentID) {
+            department = &dept;
+            break;
+        }
+    }
+
+    if (department == nullptr) {
+        throw runtime_error("Error: Department with ID " + departmentID + " not found!!!\n");
+    }
+
+    int ID, age;
+    string fullName, gender, address, phone, degree, specialty;
+    bool fullTime;
+
+    cout << "\nEnter Teacher ID: ";
+    cin >> ID;
+
+    
+    for (const auto& dept : departments) {
+        for (const auto& teacher : dept.getTeachers()) {
+            if (teacher->getID() == ID) {
+                throw runtime_error("Error: ID " + to_string(ID) + " already exists!!! Please use a different ID.\n");
+            }
+        }
+        for (const auto& staff : dept.getStaff()) {
+            if (staff->getID() == ID) {
+                throw runtime_error("Error: ID " + to_string(ID) + " already exists!!! Please use a different ID.\n");
+            }
+        }
+    }
+
+    cout << "Enter Full Name: ";
+    cin.ignore();
+    getline(cin, fullName);
+    cout << "Enter Gender: ";
+    cin >> gender;
+    cout << "Enter Age: ";
+    cin >> age;
+    cout << "Enter Address: ";
+    cin.ignore();
+    getline(cin, address);
+    cout << "Enter Phone Number: ";
+    getline(cin, phone);
+    cout << "Enter Degree (PhD/Masters/Bachelors): ";
+    cin >> degree;
+    cout << "Enter Specialty: ";
+    cin.ignore();
+    getline(cin, specialty);
+    cout << "Is Full-time (1 for Yes, 0 for No): ";
+    cin >> fullTime;
+
+    if (fullTime) {
+        department->AddTeacher(new FullTimeTeacher(ID, fullName, gender, age, departmentID, address, phone, degree, specialty));
+    } else {
+        int hoursWorked;
+        cout << "Enter Hours Worked: ";
+        cin >> hoursWorked;
+        department->AddTeacher(new PartTimeTeacher(ID, fullName, gender, age, departmentID, address, phone, degree, specialty, hoursWorked));
+    }
+
+    cout << "\nTeacher added successfully to department " << departmentID << "!\n\n";
+}
+
+void addStaff(vector<Department>& departments) {
+    int ID, age, workload;
+    string fullName, gender, departmentID, address, phone, duty;
+
+    cout << "\nEnter Staff ID: ";
+    cin >> ID;
+
+    
+    for (const auto& dept : departments) {
+        for (const auto& teacher : dept.getTeachers()) {
+            if (teacher->getID() == ID) {
+                throw runtime_error("Error: ID " + to_string(ID) + " already exists!!! Please use a different ID.\n");
+            }
+        }
+        for (const auto& staff : dept.getStaff()) {
+            if (staff->getID() == ID) {
+                throw runtime_error("Error: ID " + to_string(ID) + " already exists!!! Please use a different ID.\n");
+            }
+        }
+    }
+
+    cout << "Enter Full Name: ";
+    cin.ignore();
+    getline(cin, fullName);
+
+    cout << "Enter Gender: ";
+    cin >> gender;
+
+    cout << "Enter Age: ";
+    cin >> age;
+
+    cout << "Enter Department ID: ";
+    cin >> departmentID;
+
+    cout << "Enter Address: ";
+    cin.ignore();
+    getline(cin, address);
+
+    cout << "Enter Phone Number: ";
+    getline(cin, phone);
+
+    cout << "Enter Duty: ";
+    getline(cin, duty);
+
+    cout << "Enter Workload: ";
+    cin >> workload;
+
+    Staff* staffMember = new Staff(ID, fullName, gender, age, departmentID, address, phone, duty, workload);
+
+    for (auto& department : departments) {
+        if (department.getID() == departmentID) {
+            department.AddStaff(staffMember);
+            cout << "\nStaff member added successfully to department " << departmentID << "!\n\n";
+            return;
+        }
+    }
+
+    throw runtime_error("Error: Department with ID " + departmentID + " not found!!!\n");
+}
+
+
+    void setDean(vector<Department>& departments) {
+    cout << "\nAvailable Departments:\n";
+    for (const auto& dept : departments) {
+        cout << "ID: " << dept.getID() << ", Name: " << dept.getName() << endl;
+    }
+    
+
+    string departmentID;
+    cout << "\nEnter Department ID to set dean: ";
+    cin >> departmentID;
+
+    Department* department = nullptr;
+    for (auto& dept : departments) {
+        if (dept.getID() == departmentID) {
+            department = &dept;
+            break;
+        }
+    }
+
+    if (department == nullptr) {
+        throw runtime_error("\nError: Department with ID " + departmentID + " not found!!!\n");
+    }
+
+    cout << "\nAvailable Teachers in Department " << departmentID << ":\n";
+    for (const auto& teacher : department->getTeachers()) {
+        cout << "ID: " << teacher->getID() << ", Name: " << teacher->getName() << "\n\n";
+    }
+
+    int deanID;
+    cout << "Enter Teacher ID to set as Dean: ";
+    cin >> deanID;
+
+    Teacher* dean = nullptr;
+    for (auto& teacher : department->getTeachers()) {
+        if (teacher->getID() == deanID) {
+            dean = teacher;
+            break;
+        }
+    }
+
+    if (dean == nullptr) {
+        throw runtime_error("Error: Teacher with ID " + to_string(deanID) + " not found in Department " + departmentID + "!!!\n");
+    }
+
+    department->SetDean(dean);
+    cout << dean->getName() << " set as dean of Department " << departmentID << "!\n\n";
+}
+
+void viewDepartments(const vector<Department>& departments) {
+    cout << "\nDepartments:\n\n\n";
+    for (const auto& dept : departments) {
+        cout << dept << endl;
+    }
+}
+
+void saveData(const vector<Department>& departments) {
+    ofstream ofs("departments.txt");
+    if (!ofs) {
+        cout << "\nError: Unable to open file to save data!!!\n\n";
+        return;
+    }
+
+    for (const auto& dept : departments) {
+        dept.saveData(ofs);
+    }
+
+    ofs.close();
+    cout << "\nData saved successfully!\n\n";
+}
+
+void computePayroll(const vector<Department>& departments) {
+    cout << "\nEnter Department ID: ";
+    string departmentID;
+    cin >> departmentID;
+
+    const Department* department = nullptr;
+    for (const auto& dept : departments) {
+        if (dept.getID() == departmentID) {
+            department = &dept;
+            break;
+        }
+    }
+
+    if (department == nullptr) {
+        throw runtime_error("\nError: Department with ID " + departmentID + " not found!!!\n");
+    }
+
+    cout << "\nEnter Employee ID: ";
+    int employeeID;
+    cin >> employeeID;
+
+    for (const auto& teacher : department->getTeachers()) {
+        if (teacher->getID() == employeeID) {
+            cout << "\nPayroll for " << teacher->getName() << ": $" << teacher->computePayroll() << " per week\n\n";
+            return;
+        }
+    }
+
+    for (const auto& staff : department->getStaff()) {
+        if (staff->getID() == employeeID) {
+            cout << "\nPayroll for " << staff->getName() << ": $" << staff->computePayroll() << " per week\n\n";
+            return;
+        }
+    }
+
+    throw runtime_error("\nError: Employee with ID " + to_string(employeeID) + " not found in Department " + departmentID + "!!!\n");
+}
+
+void displayMenu() {
+    cout << "----------------- Menu -----------------\n\n";
+    cout << "1. Add Department\n";
+    cout << "2. Add Teacher\n";
+    cout << "3. Add Staff\n";
+    cout << "4. Set Dean for Department\n";
+    cout << "5. View Departments\n";
+    cout << "6. Save Data\n";
+    cout << "7. Compute Payroll\n";
+    cout << "8. Exit\n";
+    cout << "\n---------------------------------------\n\n";
+    cout << "Enter your choice: ";
+}
+
+int main() {
+    vector<Department> departments;
+
+    loadData(departments);
+
+    char choice;
+    do {
+        displayMenu();
+        cin >> choice;
+        cin.ignore();
+
+        try {
+            switch (choice) {
+                case '1':
+                    addDepartment(departments);
+                    break;
+                case '2':
+                    addTeacher(departments);
+                    break;
+                case '3':
+                    addStaff(departments);
+                    break;
+                case '4':
+                    setDean(departments);
+                    break;
+                case '5':
+                    viewDepartments(departments);
+                    break;
+                case '6':
+                    saveData(departments);
+                    break;
+                case '7':
+                    computePayroll(departments);
+                    break;
+                case '8':
+                    cout << "\nExiting program :)\n";
+                    break;
+                default:
+                    cout << "\nInvalid choice. Please try again.\n";
+                    break;
+            }
+        } catch (const runtime_error& e) {
+            cout << e.what() << endl;
+        }
+    } while (choice != '8');
+
+    return 0;
+}
